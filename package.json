@@ -1,0 +1,17 @@
+{
+  "name": "as3-wasm-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental ActionScript-3-inspired creative coding runtime that targets WebAssembly through AssemblyScript.",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @as3-wasm-runtime/bouncing-ball dev",
+    "example:bouncing-ball": "pnpm --filter @as3-wasm-runtime/bouncing-ball dev"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.9",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.11.0"
+}

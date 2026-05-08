@@ -1,0 +1,44 @@
+# @as3-wasm-runtime/runtime-as
+
+AssemblyScript runtime primitives for the experimental AS3-inspired creative
+coding environment.
+
+## What it includes
+
+- `Event`
+- `EventDispatcher`
+- `DisplayObject`
+- `DisplayObjectContainer`
+- `Sprite`
+- `Bitmap`
+- `Stage`
+
+The classes are intentionally small. They model the parts needed by the first
+demo: transform properties, visibility, alpha, parent/child display lists,
+`addChild`, `removeChild`, and `Event.ENTER_FRAME`.
+
+## Rendering contract
+
+`Stage.tick(deltaTime)` dispatches `Event.ENTER_FRAME` through the display tree
+and rebuilds a flat render list. JavaScript reads the render list directly from
+Wasm memory through:
+
+- `getRenderListPtr()`
+- `getRenderListLength()`
+- `getRenderListStride()`
+
+Each render command is currently a 9-field `Float64Array` record:
+
+```txt
+[kind, assetId, x, y, rotation, scaleX, scaleY, alpha, visible]
+```
+
+Only bitmap commands exist in this MVP.
+
+## Build
+
+```sh
+pnpm --filter @as3-wasm-runtime/runtime-as build
+```
+
+The package also acts as an AssemblyScript source dependency for examples.
