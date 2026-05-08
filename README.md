@@ -59,7 +59,7 @@ class Main extends Sprite {
     super();
     this.ball = new Bitmap("ball.png");
     this.addChild(this.ball);
-    this.addEventListener(Event.ENTER_FRAME, this.onFrame);
+    this.addEventListener<Main>(Event.ENTER_FRAME, this.onFrame);
   }
 
   private onFrame(e: Event): void {
@@ -68,6 +68,10 @@ class Main extends Sprite {
   }
 }
 ```
+
+AssemblyScript requires the explicit `<Main>` type argument for this method
+reference today. The intended ergonomic target is the classic AS3 shape without
+that type hint.
 
 The browser host in `runtime-js` loads the Wasm module, calls `update(dt)` every
 animation frame, reads a compact render list from Wasm memory, and draws bitmap

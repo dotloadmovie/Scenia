@@ -12,7 +12,7 @@ export class Event {
   }
 }
 
-export type EventListener = (event: Event) => void;
+export type EventListener = (this: EventDispatcher, event: Event) => void;
 
 class ListenerEntry {
   type: string;
@@ -27,30 +27,29 @@ class ListenerEntry {
 export class EventDispatcher {
   private listeners: Array<ListenerEntry> = new Array<ListenerEntry>();
 
-  addEventListener(type: string, listener: EventListener): void {
-    this.listeners.push(new ListenerEntry(type, listener));
+  addEventListener<T extends EventDispatcher>(type: string, listener: (this: T, event: Event) => void): void {
+    this.listeners.push(new ListenerEntry(type, changetype<EventListener>(listener)));
   }
 
-  removeEventListener(type: string, listener: EventListener): void {
+  removeEventListener<T extends EventDispatcher>(type: string, listener: (this: T, event: Event) => void): void {
+    let storedListener = changetype<EventListener>(listener);
     for (let i = this.listeners.length - 1; i >= 0; i--) {
       let entry = this.listeners[i];
-      if (entry.type == type && entry.listener == listener) {
+      if (entry.type == type && entry.listener == storedListener) {
         this.listeners.splice(i, 1);
       }
     }
   }
 
   dispatchEvent(event: Event): void {
-    if (event.target == null) {
-      event.target = this;
-    }
+    event.target = this;
     event.currentTarget = this;
 
     let snapshot = this.listeners.slice(0);
     for (let i = 0; i < snapshot.length; i++) {
       let entry = snapshot[i];
       if (entry.type == event.type) {
-        entry.listener(event);
+        entry.listener.call(this, event);
       }
     }
   }

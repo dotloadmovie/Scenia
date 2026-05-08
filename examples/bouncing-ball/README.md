@@ -7,6 +7,9 @@ a `Bitmap("ball.png")`, and an `Event.ENTER_FRAME` listener. The browser app in
 `src/main.ts` loads the generated Wasm module and draws the render list to
 Canvas2D.
 
+The `addEventListener<Main>(...)` call uses an explicit type argument because
+AssemblyScript method references keep their concrete `this` type.
+
 ## Run
 
 From the repository root:

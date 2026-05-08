@@ -56,9 +56,9 @@ function collectContainer(
   for (let i = 0; i < container.numChildren; i++) {
     let child = container.getChildAt(i);
     if (child instanceof DisplayObjectContainer) {
-      collectContainer(child, worldX, worldY, worldRotation, worldScaleX, worldScaleY, worldAlpha, visible);
+      collectContainer(child as DisplayObjectContainer, worldX, worldY, worldRotation, worldScaleX, worldScaleY, worldAlpha, visible);
     } else if (child instanceof Bitmap) {
-      collectBitmap(child, worldX, worldY, worldRotation, worldScaleX, worldScaleY, worldAlpha, visible);
+      collectBitmap(child as Bitmap, worldX, worldY, worldRotation, worldScaleX, worldScaleY, worldAlpha, visible);
     }
   }
 }

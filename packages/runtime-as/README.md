@@ -41,4 +41,5 @@ Only bitmap commands exist in this MVP.
 pnpm --filter @as3-wasm-runtime/runtime-as build
 ```
 
-The package also acts as an AssemblyScript source dependency for examples.
+The build compiles a small smoke module to verify the source package. The
+package also acts as an AssemblyScript source dependency for examples.

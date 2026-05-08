@@ -23,12 +23,10 @@ class Main extends Sprite {
     this.ball.scaleY = 0.75;
 
     this.addChild(this.ball);
-    this.addEventListener(Event.ENTER_FRAME, (event: Event): void => {
-      this.onFrame(event);
-    });
+    this.addEventListener<Main>(Event.ENTER_FRAME, this.onFrame);
   }
 
-  private onFrame(event: Event): void {
+  onFrame(event: Event): void {
     this.ball.x += this.velocityX * event.deltaTime;
     this.ball.y += this.velocityY * event.deltaTime;
     this.ball.rotation += 180 * event.deltaTime;
