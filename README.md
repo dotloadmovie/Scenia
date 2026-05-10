@@ -4,6 +4,8 @@ An experimental browser-based proof of concept for a Flash/ActionScript-3-inspir
 creative coding runtime that compiles user code to WebAssembly with
 AssemblyScript.
 
+This project currently lives in the `atast` repository.
+
 This is intentionally **not** a Flash emulator. It does not parse SWF files,
 does not target Flash compatibility, and does not attempt to recreate the full
 ActionScript 3 standard library. The goal is to explore whether the ergonomic
@@ -95,7 +97,6 @@ The bridge is deliberately small:
   6. scaleX
   7. scaleY
   8. alpha
-  9. visible flag
 
 Asset ids are deterministic hashes of bitmap paths. `new Bitmap("ball.png")` in
 AssemblyScript and `assetIdForPath("ball.png")` in JavaScript produce the same
