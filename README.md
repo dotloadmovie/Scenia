@@ -30,7 +30,8 @@ packages/
   sketch-host/     Shared Vite shell + `as3-sketch` CLI for browser sketches
   compiler/        Placeholder for a later AS3-like-to-AssemblyScript transform
 examples/
-  bouncing-ball/   Sketch (Wasm + assets + sketch.json) using sketch-host
+  <name>/          Sketches (pnpm exec as3-sketch scaffold --help)
+  bouncing-ball/   Reference sketch using sketch-host
 ```
 
 ## Getting started
@@ -62,6 +63,17 @@ From the repository root (after `pnpm install`):
 pnpm run sketch dev examples/bouncing-ball
 pnpm run sketch build examples/bouncing-ball
 ```
+
+Scaffold a new empty sketch (creates `examples/<slug>/` with `sketch.json`,
+`assembly/index.ts` bound to an empty `Stage`, and `asconfig.json`):
+
+```sh
+pnpm run sketch -- scaffold my-sketch
+pnpm exec as3-sketch scaffold my-sketch --width 1280 --height 720
+```
+
+Use `pnpm run sketch -- scaffold …` so `--width` / `--height` are not parsed by
+pnpm. See `pnpm exec as3-sketch scaffold --help`.
 
 Extra Vite flags go after `--`:
 

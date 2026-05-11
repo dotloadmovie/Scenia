@@ -3,6 +3,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runScaffold } from "./scaffold.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(__dirname, "..");
@@ -93,9 +94,11 @@ function printHelp(): void {
 Usage:
   as3-sketch dev [sketch-directory] [-- ...vite-args]
   as3-sketch build [sketch-directory] [-- ...vite-args]
+  as3-sketch scaffold <slug> [--width <n>] [--height <n>] [--description <text>]
 
 Examples:
   as3-sketch dev examples/bouncing-ball
+  as3-sketch scaffold particle-field --width 1280 --height 720
   pnpm --filter @as3-wasm-runtime/sketch-host exec -- as3-sketch dev .
 
 Environment:
@@ -104,6 +107,7 @@ Environment:
 Notes:
   sketch.json must declare assembly entry/config/target and optional hooks.preCompile.
   Optional host extension: sketch-directory/host/main.ts (see repository README).
+  Run \`as3-sketch scaffold --help\` for scaffold details.
 `);
 }
 
@@ -121,7 +125,19 @@ function parseArgs(argv: string[]): { cmd: "dev" | "build"; sketchPath: string; 
 }
 
 async function main(): Promise<void> {
-  let { cmd, sketchPath, viteArgs } = parseArgs(process.argv.slice(2));
+  let argv = process.argv.slice(2);
+  let head = argv[0];
+  if (head === "scaffold") {
+    try {
+      runScaffold(process.cwd(), argv.slice(1));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+    return;
+  }
+
+  let { cmd, sketchPath, viteArgs } = parseArgs(argv);
   let sketchRoot =
     process.env.SKETCH_ROOT != null && process.env.SKETCH_ROOT.length > 0
       ? path.resolve(process.env.SKETCH_ROOT)
