@@ -1,4 +1,4 @@
-export { Event, EventDispatcher, EventListener } from "./Event";
+export { Event, EventDispatcher, EventListener, PointerEvent } from "./Event";
 export { DisplayObject } from "./DisplayObject";
 export { DisplayObjectContainer } from "./DisplayObjectContainer";
 export { Sprite } from "./Sprite";
@@ -13,3 +13,11 @@ export {
   getRenderListLength,
   getRenderListPtr
 } from "./renderList";
+export { registerAssetDimensions } from "./assetDimensions";
+export {
+  POINTER_KIND_DOWN,
+  POINTER_KIND_MOVE,
+  POINTER_KIND_UP,
+  bindStage,
+  dispatchPointerFromHost
+} from "./pointerDispatch";

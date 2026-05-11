@@ -12,6 +12,25 @@ export class Event {
   }
 }
 
+export class PointerEvent extends Event {
+  static readonly POINTER_DOWN: string = "pointerDown";
+  static readonly POINTER_UP: string = "pointerUp";
+  static readonly POINTER_MOVE: string = "pointerMove";
+
+  stageX: f32;
+  stageY: f32;
+  localX: f32;
+  localY: f32;
+
+  constructor(type: string, stageX: f32, stageY: f32, localX: f32, localY: f32) {
+    super(type, 0);
+    this.stageX = stageX;
+    this.stageY = stageY;
+    this.localX = localX;
+    this.localY = localY;
+  }
+}
+
 export type EventListener = (this: EventDispatcher, event: Event) => void;
 
 class ListenerEntry {

@@ -1,11 +1,18 @@
 export const RENDER_KIND_BITMAP = 1;
 export const RENDER_LIST_STRIDE = 8;
 
-export interface WasmRuntimeExports extends WebAssembly.Exports {
+/** Wasm `dispatchPointerFromHost` kind argument; must match runtime-as `POINTER_KIND_*`. */
+export const POINTER_KIND_DOWN = 1;
+export const POINTER_KIND_UP = 2;
+export const POINTER_KIND_MOVE = 3;
+
+export interface WasmRuntimeExports {
   memory: WebAssembly.Memory;
   update(deltaTime: number): void;
   getRenderListPtr(): number;
   getRenderListLength(): number;
+  registerAssetDimensions?(assetId: number, width: number, height: number): void;
+  dispatchPointerFromHost?(stageX: number, stageY: number, kind: number): void;
 }
 
 export interface RuntimeAsset {
@@ -50,6 +57,16 @@ export class WasmCanvasRuntime {
   private readonly background: string;
   private animationFrameId: number | null = null;
   private lastTimestamp = 0;
+  private pointerBridgeAttached = false;
+  private readonly pointerDownHandler = (event: PointerEvent): void => {
+    this.dispatchPointerToWasm(event, POINTER_KIND_DOWN);
+  };
+  private readonly pointerUpHandler = (event: PointerEvent): void => {
+    this.dispatchPointerToWasm(event, POINTER_KIND_UP);
+  };
+  private readonly pointerMoveHandler = (event: PointerEvent): void => {
+    this.dispatchPointerToWasm(event, POINTER_KIND_MOVE);
+  };
 
   private constructor(canvas: HTMLCanvasElement, exports: WasmRuntimeExports, background: string) {
     let context = canvas.getContext("2d");
@@ -92,6 +109,7 @@ export class WasmCanvasRuntime {
 
     await image.decode();
     this.images.set(id, image);
+    this.pushAssetDimensionsToWasm(id, image.naturalWidth, image.naturalHeight);
     return image;
   }
 
@@ -101,6 +119,7 @@ export class WasmCanvasRuntime {
     }
 
     this.lastTimestamp = performance.now();
+    this.attachPointerBridge();
     this.animationFrameId = requestAnimationFrame(this.frame);
   }
 
@@ -111,6 +130,7 @@ export class WasmCanvasRuntime {
 
     cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = null;
+    this.detachPointerBridge();
   }
 
   step(deltaTime: number): void {
@@ -185,6 +205,59 @@ export class WasmCanvasRuntime {
     this.step(deltaTime);
     this.animationFrameId = requestAnimationFrame(this.frame);
   };
+
+  private pushAssetDimensionsToWasm(assetId: number, width: number, height: number): void {
+    let register = this.exports.registerAssetDimensions;
+    if (typeof register === "function") {
+      register(assetId, width, height);
+    }
+  }
+
+  private clientToStage(clientX: number, clientY: number): { stageX: number; stageY: number } {
+    let rect = this.canvas.getBoundingClientRect();
+    let scaleX = this.canvas.width / rect.width;
+    let scaleY = this.canvas.height / rect.height;
+    return {
+      stageX: (clientX - rect.left) * scaleX,
+      stageY: (clientY - rect.top) * scaleY
+    };
+  }
+
+  private dispatchPointerToWasm(event: PointerEvent, kind: number): void {
+    let dispatch = this.exports.dispatchPointerFromHost;
+    if (typeof dispatch !== "function") {
+      return;
+    }
+
+    let { stageX, stageY } = this.clientToStage(event.clientX, event.clientY);
+    dispatch(stageX, stageY, kind);
+  }
+
+  private attachPointerBridge(): void {
+    if (this.pointerBridgeAttached) {
+      return;
+    }
+
+    if (typeof this.exports.dispatchPointerFromHost !== "function") {
+      return;
+    }
+
+    this.canvas.addEventListener("pointerdown", this.pointerDownHandler);
+    this.canvas.addEventListener("pointerup", this.pointerUpHandler);
+    this.canvas.addEventListener("pointermove", this.pointerMoveHandler);
+    this.pointerBridgeAttached = true;
+  }
+
+  private detachPointerBridge(): void {
+    if (!this.pointerBridgeAttached) {
+      return;
+    }
+
+    this.canvas.removeEventListener("pointerdown", this.pointerDownHandler);
+    this.canvas.removeEventListener("pointerup", this.pointerUpHandler);
+    this.canvas.removeEventListener("pointermove", this.pointerMoveHandler);
+    this.pointerBridgeAttached = false;
+  }
 }
 
 async function instantiateWasm(
@@ -231,7 +304,7 @@ function assertRuntimeExports(exports: WebAssembly.Exports): WasmRuntimeExports 
     }
   }
 
-  return exports as WasmRuntimeExports;
+  return exports as unknown as WasmRuntimeExports;
 }
 
 const REQUIRED_FUNCTION_EXPORTS = ["update", "getRenderListPtr", "getRenderListLength"] as const;
