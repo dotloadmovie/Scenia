@@ -18,6 +18,7 @@ export {
   POINTER_KIND_DOWN,
   POINTER_KIND_MOVE,
   POINTER_KIND_UP,
+  __debugLastPointerHitAssetId,
   bindStage,
   dispatchPointerFromHost
 } from "./pointerDispatch";

@@ -13,6 +13,7 @@ export interface WasmRuntimeExports {
   getRenderListLength(): number;
   registerAssetDimensions?(assetId: number, width: number, height: number): void;
   dispatchPointerFromHost?(stageX: number, stageY: number, kind: number): void;
+  __debugLastPointerHitAssetId?(): number;
 }
 
 export interface RuntimeAsset {
@@ -27,6 +28,8 @@ export interface RuntimeHostOptions {
   assets?: Array<string | RuntimeAsset>;
   background?: string;
   imports?: WebAssembly.Imports;
+  /** When true, log pointer mapping and post-dispatch Wasm hit-test asset id (if exported). */
+  debugPointer?: boolean;
 }
 
 export interface RenderCommand {
@@ -55,9 +58,11 @@ export class WasmCanvasRuntime {
 
   private readonly images = new Map<number, HTMLImageElement>();
   private readonly background: string;
+  private readonly debugPointer: boolean;
   private animationFrameId: number | null = null;
   private lastTimestamp = 0;
   private pointerBridgeAttached = false;
+  private pointerBridgeLogged = false;
   private readonly pointerDownHandler = (event: PointerEvent): void => {
     this.dispatchPointerToWasm(event, POINTER_KIND_DOWN);
   };
@@ -68,7 +73,7 @@ export class WasmCanvasRuntime {
     this.dispatchPointerToWasm(event, POINTER_KIND_MOVE);
   };
 
-  private constructor(canvas: HTMLCanvasElement, exports: WasmRuntimeExports, background: string) {
+  private constructor(canvas: HTMLCanvasElement, exports: WasmRuntimeExports, background: string, debugPointer: boolean) {
     let context = canvas.getContext("2d");
     if (context == null) {
       throw new Error("Canvas2D is not available in this browser.");
@@ -78,6 +83,7 @@ export class WasmCanvasRuntime {
     this.context = context;
     this.exports = exports;
     this.background = background;
+    this.debugPointer = debugPointer;
   }
 
   static async load(options: RuntimeHostOptions): Promise<WasmCanvasRuntime> {
@@ -86,7 +92,8 @@ export class WasmCanvasRuntime {
     let runtime = new WasmCanvasRuntime(
       options.canvas,
       runtimeExports,
-      options.background ?? "#ffffff"
+      options.background ?? "#ffffff",
+      options.debugPointer ?? false
     );
 
     await runtime.loadAssets(options.assets ?? []);
@@ -231,6 +238,23 @@ export class WasmCanvasRuntime {
 
     let { stageX, stageY } = this.clientToStage(event.clientX, event.clientY);
     dispatch(stageX, stageY, kind);
+
+    if (this.debugPointer) {
+      let hitAssetId: number | undefined;
+      let peek = this.exports.__debugLastPointerHitAssetId;
+      if (typeof peek === "function") {
+        hitAssetId = peek();
+      }
+
+      console.log("[as3-wasm-runtime:pointer]", {
+        kind,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        stageX,
+        stageY,
+        hitAssetId
+      });
+    }
   }
 
   private attachPointerBridge(): void {
@@ -246,6 +270,11 @@ export class WasmCanvasRuntime {
     this.canvas.addEventListener("pointerup", this.pointerUpHandler);
     this.canvas.addEventListener("pointermove", this.pointerMoveHandler);
     this.pointerBridgeAttached = true;
+
+    if (this.debugPointer && !this.pointerBridgeLogged) {
+      this.pointerBridgeLogged = true;
+      console.log("[as3-wasm-runtime:pointer]", "bridge attached (pointerdown/up/move -> Wasm)");
+    }
   }
 
   private detachPointerBridge(): void {

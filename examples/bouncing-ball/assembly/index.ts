@@ -4,6 +4,7 @@ import {
   PointerEvent,
   Sprite,
   Stage,
+  __debugLastPointerHitAssetId,
   bindStage,
   dispatchPointerFromHost,
   getRenderListLength as runtimeGetRenderListLength,
@@ -83,4 +84,4 @@ export function getRenderListLength(): i32 {
   return runtimeGetRenderListLength();
 }
 
-export { dispatchPointerFromHost, registerAssetDimensions };
+export { __debugLastPointerHitAssetId, dispatchPointerFromHost, registerAssetDimensions };
