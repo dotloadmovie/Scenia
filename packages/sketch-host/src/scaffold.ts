@@ -1,0 +1,241 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+function findRepoRoot(from: string): string {
+  let dir = from;
+  for (;;) {
+    let marker = path.join(dir, "pnpm-workspace.yaml");
+    if (existsSync(marker)) {
+      return dir;
+    }
+    let parent = path.dirname(dir);
+    if (parent === dir) {
+      throw new Error("Could not locate pnpm-workspace.yaml above " + from);
+    }
+    dir = parent;
+  }
+}
+
+function validateSlug(slug: string): void {
+  if (!SLUG_RE.test(slug)) {
+    throw new Error(
+      `Invalid slug "${slug}". Use lowercase kebab-case (letters, digits, hyphens), e.g. my-demo.`
+    );
+  }
+}
+
+function parsePositiveInt(name: string, value: string): number {
+  let n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 16384) {
+    throw new Error(`${name} must be an integer between 1 and 16384, got ${JSON.stringify(value)}`);
+  }
+  return n;
+}
+
+export interface ScaffoldOptions {
+  slug: string;
+  width: number;
+  height: number;
+  description: string;
+}
+
+export function printScaffoldHelp(): void {
+  console.log(`as3-sketch scaffold — new empty sketch under examples/<slug>
+
+Usage:
+  as3-sketch scaffold <slug> [--width <px>] [--height <px>] [--description <text>]
+
+Options:
+  -w, --width          Stage / canvas width (default 640)
+      --height         Stage / canvas height (default 360)
+  -d, --description    package.json "description" field
+
+Slug: lowercase kebab-case (e.g. particle-field).
+
+Must be run from inside the monorepo (pnpm-workspace.yaml is discovered upward).
+
+From the repo root, prefer passing flags through pnpm, for example:
+  pnpm run sketch -- scaffold particle-field --width 1280 --height 720
+`);
+}
+
+export function parseScaffoldArgv(argv: string[]): ScaffoldOptions {
+  let slug: string | undefined;
+  let width = 640;
+  let height = 360;
+  let description = "";
+
+  for (let i = 0; i < argv.length; i++) {
+    let a = argv[i];
+    if (a === "--width" || a === "-w") {
+      width = parsePositiveInt("--width", argv[++i] ?? "");
+      continue;
+    }
+    if (a === "--height") {
+      height = parsePositiveInt("--height", argv[++i] ?? "");
+      continue;
+    }
+    if (a === "--description" || a === "-d") {
+      description = argv[++i] ?? "";
+      continue;
+    }
+    if (a.startsWith("-")) {
+      throw new Error(`Unknown option ${JSON.stringify(a)}`);
+    }
+    if (slug != null) {
+      throw new Error(`Unexpected extra argument ${JSON.stringify(a)}`);
+    }
+    slug = a;
+  }
+
+  if (slug == null || slug.length === 0) {
+    printScaffoldHelp();
+    throw new Error("Missing <slug>.");
+  }
+
+  validateSlug(slug);
+  return { slug, width, height, description };
+}
+
+function assemblySource(width: number, height: number): string {
+  return `import {
+  Stage,
+  bindStage,
+  getRenderListLength as runtimeGetRenderListLength,
+  getRenderListPtr as runtimeGetRenderListPtr
+} from "@as3-wasm-runtime/runtime-as/as3";
+
+const stage = new Stage(${width}, ${height});
+bindStage(stage);
+
+export function update(deltaTime: f32): void {
+  stage.tick(deltaTime);
+}
+
+export function getRenderListPtr(): usize {
+  return runtimeGetRenderListPtr();
+}
+
+export function getRenderListLength(): i32 {
+  return runtimeGetRenderListLength();
+}
+`;
+}
+
+function sketchJson(slug: string, width: number, height: number): string {
+  let o = {
+    wasmUrl: "/main.wasm",
+    canvas: {
+      selector: "#stage",
+      width,
+      height
+    },
+    runtime: {
+      background: "#1a1a1a",
+      assets: [] as string[]
+    },
+    assembly: {
+      entry: "assembly/index.ts",
+      config: "asconfig.json",
+      target: "release"
+    }
+  };
+  return JSON.stringify(o, null, 2) + "\n";
+}
+
+function packageJson(slug: string, description: string): string {
+  let desc =
+    description.length > 0
+      ? description
+      : `Empty sketch scaffolded with as3-sketch (see repository README).`;
+  let o = {
+    name: "@as3-wasm-runtime/" + slug,
+    version: "0.1.0",
+    private: true,
+    description: desc,
+    type: "module",
+    scripts: {
+      dev: "pnpm exec as3-sketch dev .",
+      build: "pnpm exec as3-sketch build ."
+    },
+    dependencies: {
+      "@as3-wasm-runtime/runtime-js": "workspace:*",
+      "@as3-wasm-runtime/sketch-host": "workspace:*"
+    },
+    devDependencies: {
+      "@as3-wasm-runtime/runtime-as": "workspace:*",
+      assemblyscript: "^0.28.9"
+    }
+  };
+  return JSON.stringify(o, null, 2) + "\n";
+}
+
+const ASCONFIG_JSON = `{
+  "targets": {
+    "release": {
+      "outFile": "public/main.wasm",
+      "optimizeLevel": 3,
+      "shrinkLevel": 0,
+      "converge": false,
+      "noAssert": false,
+      "exportRuntime": true
+    }
+  }
+}
+`;
+
+function readme(slug: string): string {
+  return `# ${slug}
+
+Empty sketch created with \`as3-sketch scaffold\`. AssemblyScript entry:
+\`assembly/index.ts\` (bound \`Stage\` with no display objects yet).
+
+## Run
+
+\`\`\`sh
+pnpm install   # from repository root, once
+pnpm run sketch dev examples/${slug}
+\`\`\`
+
+Or from this directory: \`pnpm dev\`.
+
+## Build
+
+\`\`\`sh
+pnpm run sketch build examples/${slug}
+\`\`\`
+
+See the repository root README for \`sketch.json\`, optional \`host/main.ts\`, and the default canvas shell.
+`;
+}
+
+export function runScaffold(cwd: string, argv: string[]): void {
+  if (argv[0] === "--help" || argv[0] === "-h") {
+    printScaffoldHelp();
+    return;
+  }
+
+  let opts = parseScaffoldArgv(argv);
+  let repoRoot = findRepoRoot(cwd);
+  let examplesDir = path.join(repoRoot, "examples");
+  let sketchDir = path.join(examplesDir, opts.slug);
+
+  if (existsSync(sketchDir)) {
+    throw new Error("Directory already exists: " + sketchDir);
+  }
+
+  mkdirSync(path.join(sketchDir, "assembly"), { recursive: true });
+  mkdirSync(path.join(sketchDir, "public"), { recursive: true });
+
+  writeFileSync(path.join(sketchDir, "package.json"), packageJson(opts.slug, opts.description), "utf8");
+  writeFileSync(path.join(sketchDir, "sketch.json"), sketchJson(opts.slug, opts.width, opts.height), "utf8");
+  writeFileSync(path.join(sketchDir, "asconfig.json"), ASCONFIG_JSON, "utf8");
+  writeFileSync(path.join(sketchDir, "assembly", "index.ts"), assemblySource(opts.width, opts.height), "utf8");
+  writeFileSync(path.join(sketchDir, "public", ".gitkeep"), "", "utf8");
+  writeFileSync(path.join(sketchDir, "README.md"), readme(opts.slug), "utf8");
+
+  console.log("Created sketch at " + sketchDir);
+  console.log("Next: pnpm install && pnpm run sketch dev examples/" + opts.slug);
+}

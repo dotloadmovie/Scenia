@@ -27,9 +27,11 @@ and a full compiler are explicitly out of scope for this MVP.
 packages/
   runtime-as/      AssemblyScript display-list primitives compiled into Wasm
   runtime-js/      TypeScript browser host that owns canvas, assets, and drawing
+  sketch-host/     Shared Vite shell + `as3-sketch` CLI for browser sketches
   compiler/        Placeholder for a later AS3-like-to-AssemblyScript transform
 examples/
-  bouncing-ball/   Vite demo using the runtime end to end
+  <name>/          Sketches (pnpm exec as3-sketch scaffold --help)
+  bouncing-ball/   Reference sketch using sketch-host
 ```
 
 ## Getting started
@@ -46,6 +48,53 @@ as:
 ```sh
 pnpm example:bouncing-ball
 ```
+
+### Sketches (`sketch-host` + `as3-sketch`)
+
+Sketches avoid duplicating Vite boilerplate: one shared package
+(`@as3-wasm-runtime/sketch-host`) owns the dev server, HTML shell, Wasm output
+location (`public/` under the sketch), and `vite build`. Each sketch directory
+carries `sketch.json` (manifest), AssemblyScript sources + `asconfig.json`,
+`public/` assets, and optionally a **host extension** (see below).
+
+From the repository root (after `pnpm install`):
+
+```sh
+pnpm run sketch dev examples/bouncing-ball
+pnpm run sketch build examples/bouncing-ball
+```
+
+Scaffold a new empty sketch (creates `examples/<slug>/` with `sketch.json`,
+`assembly/index.ts` bound to an empty `Stage`, and `asconfig.json`):
+
+```sh
+pnpm run sketch -- scaffold my-sketch
+pnpm exec as3-sketch scaffold my-sketch --width 1280 --height 720
+```
+
+Use `pnpm run sketch -- scaffold …` so `--width` / `--height` are not parsed by
+pnpm. See `pnpm exec as3-sketch scaffold --help`.
+
+Extra Vite flags go after `--`:
+
+```sh
+pnpm run sketch dev examples/bouncing-ball -- --port 5174
+```
+
+**Default shell:** `index.html` is only charset, viewport, an empty title, and
+a module entry—no layout chrome. The default bootstrap creates a canvas with id
+`#stage` (or uses the one from `sketch.json` `canvas.selector`) and loads
+`WasmCanvasRuntime` from `@as3-wasm-runtime/runtime-js` using manifest fields
+`wasmUrl`, `runtime.assets`, `runtime.background`, and optional
+`runtime.debugPointerQueryParam`.
+
+**Host extension (escape hatch):** If `host/main.ts` exists under the sketch
+root, it is used as the app entry instead of the default bootstrap. Import
+`bootstrapFromManifest` from `@as3-wasm-runtime/sketch-host`, import
+`virtual:sketch-manifest`, add any HTML/CSS/DOM or extra bindings there, then
+call `bootstrapFromManifest(manifest)`. Optional `host/main.css` (or other
+modules) can be imported from that file. Remove `host/main.ts` to fall back to
+the canvas-only default for the same Wasm and manifest.
 
 ## First-pass architecture
 

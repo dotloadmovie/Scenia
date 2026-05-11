@@ -45,17 +45,17 @@ class Main extends Sprite {
     this.ball.y += this.velocityY * event.deltaTime;
     this.ball.rotation += 180 * event.deltaTime;
 
-    if (this.ball.x < 0 || this.ball.x > 576) {
+    if (this.ball.x < 0 || this.ball.x > 1200) {
       this.velocityX = -this.velocityX;
     }
 
-    if (this.ball.y < 0 || this.ball.y > 296) {
+    if (this.ball.y < 0 || this.ball.y > 640) {
       this.velocityY = -this.velocityY;
     }
   }
 }
 
-const stage = new Stage(640, 360);
+const stage = new Stage(1280, 720);
 let main = new Main();
 stage.addChild(main);
 bindStage(stage);
