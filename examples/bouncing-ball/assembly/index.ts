@@ -1,11 +1,27 @@
 import {
   Bitmap,
   Event,
+  PointerEvent,
   Sprite,
   Stage,
+  __debugLastPointerHitAssetId,
+  bindStage,
+  dispatchPointerFromHost,
   getRenderListLength as runtimeGetRenderListLength,
-  getRenderListPtr as runtimeGetRenderListPtr
+  getRenderListPtr as runtimeGetRenderListPtr,
+  registerAssetDimensions
 } from "@as3-wasm-runtime/runtime-as/as3";
+
+let activeMain: Main | null = null;
+
+function onBallPointerDownGlobal(this: Bitmap, _event: Event): void {
+  let main = activeMain;
+  if (main == null) {
+    return;
+  }
+
+  main.reverseVelocity();
+}
 
 class Main extends Sprite {
   private ball: Bitmap;
@@ -25,6 +41,16 @@ class Main extends Sprite {
     this.addEventListener<Main>(Event.ENTER_FRAME, this.onFrame);
   }
 
+  wireInputHandlers(): void {
+    activeMain = this;
+    this.ball.addEventListener<Bitmap>(PointerEvent.POINTER_DOWN, onBallPointerDownGlobal);
+  }
+
+  reverseVelocity(): void {
+    this.velocityX = -this.velocityX;
+    this.velocityY = -this.velocityY;
+  }
+
   onFrame(event: Event): void {
     this.ball.x += this.velocityX * event.deltaTime;
     this.ball.y += this.velocityY * event.deltaTime;
@@ -41,7 +67,10 @@ class Main extends Sprite {
 }
 
 const stage = new Stage(640, 360);
-stage.addChild(new Main());
+let main = new Main();
+stage.addChild(main);
+main.wireInputHandlers();
+bindStage(stage);
 
 export function update(deltaTime: f32): void {
   stage.tick(deltaTime);
@@ -54,3 +83,5 @@ export function getRenderListPtr(): usize {
 export function getRenderListLength(): i32 {
   return runtimeGetRenderListLength();
 }
+
+export { __debugLastPointerHitAssetId, dispatchPointerFromHost, registerAssetDimensions };

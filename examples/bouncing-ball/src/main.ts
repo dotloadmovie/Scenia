@@ -7,11 +7,14 @@ async function boot(): Promise<void> {
     throw new Error("Missing #stage canvas.");
   }
 
+  let debugPointer = new URLSearchParams(window.location.search).has("debugPointer");
+
   let runtime = await WasmCanvasRuntime.load({
     canvas,
     wasmUrl: "/main.wasm",
     background: "#101827",
-    assets: ["ball.png"]
+    assets: ["ball.png"],
+    debugPointer
   });
 
   runtime.start();
