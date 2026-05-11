@@ -1,13 +1,82 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const outputPath = join(directory, "../public/ball.png");
 
-// A tiny 64x64 PNG used by the demo. Keeping it as base64 keeps the repo text-only.
-const ballPngBase64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAABhUlEQVR4nO2aQQ6DIBBFB///yc1UAxVdBr1nuzAEyudSSBAkD8FlMpmZ+zOAHqifzePfWZOPrfIuNWTwtcJv3TfuElZ5h1AALHoBv1vOOK5sGmEdZOA1Y1QeQP0bz8z4exlpyGr/T6/XKGMJISilFELP87K+xSA7i1kHGbgeZESd933vy7Lk83m+8+xQgi1ns9l8Pp+11pyz2+2maYZhBEEIKfV9H4bhi/cWIcSY8z4I4ZxjtNaa+xr+eFfXPceYtxhrzvv9np7nzPO8NE0xvvlBnufo+97j8cRxHL1eb8y5PM/Rtm0cx1prqtXqZDJJkgRjrDzPk2UZx7EoijzPk+e5qqqIoiiOYxiGTqeTz+eVZVnX9TzPq6rKeZ7P5+M4zuPxyrJ84Nj70aS1qqp6nqcS9++E9WIYBkIQhqE4jh8YH65K01RVlWVZ0zTqLoHv9xti7OI4tm3zPG+MUavVkmVZ3W63KIqaprmua/CM+Tymqeo8z8MwjDFmOBymaZpSSilFURRFUTjn8/luNt6FEGLM8zxN0+R5XtM0V/X/ZOq1AMf2H8e0c/4AAh8ufzRcZK0AAAAASUVORK5CYII=";
+/** PNG CRC-32 over chunk type + chunk data (IEEE polynomial). */
+const crcTable = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+  let c = n;
+  for (let k = 0; k < 8; k++) {
+    c = c & 1 ? (0xedb88320 ^ (c >>> 1)) >>> 0 : c >>> 1;
+  }
+  crcTable[n] = c >>> 0;
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buffer.length; i++) {
+    crc = (crcTable[(crc ^ buffer[i]) & 0xff] ^ (crc >>> 8)) >>> 0;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  let typeBuf = Buffer.from(type, "latin1");
+  let length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  let crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([length, typeBuf, data, crc]);
+}
+
+/**
+ * Writes a 64×64 RGBA PNG: bright red (#ff0000) disk on a transparent background
+ * so it stays high-contrast on the dark demo canvas.
+ */
+function createBrightRedBallPng() {
+  let width = 64;
+  let height = 64;
+  let cx = (width - 1) / 2;
+  let cy = (height - 1) / 2;
+  let radius = 28;
+  let r2 = radius * radius;
+
+  let raw = Buffer.alloc(height * (1 + width * 4));
+  let o = 0;
+  for (let y = 0; y < height; y++) {
+    raw[o++] = 0;
+    for (let x = 0; x < width; x++) {
+      let dx = x - cx;
+      let dy = y - cy;
+      let inside = dx * dx + dy * dy <= r2;
+      raw[o++] = inside ? 255 : 0;
+      raw[o++] = 0;
+      raw[o++] = 0;
+      raw[o++] = inside ? 255 : 0;
+    }
+  }
+
+  let ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  let compressed = deflateSync(raw, { level: 9 });
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", compressed),
+    pngChunk("IEND", Buffer.alloc(0))
+  ]);
+}
 
 await mkdir(dirname(outputPath), { recursive: true });
-await writeFile(outputPath, Buffer.from(ballPngBase64, "base64"));
+await writeFile(outputPath, createBrightRedBallPng());
