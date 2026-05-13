@@ -20,7 +20,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@as3-wasm-runtime/runtime-js": "workspace:*"
+    "@as3-wasm-runtime/runtime-js": "workspace:*",
+    "chokidar": "^4.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",

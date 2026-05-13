@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import chokidar from "chokidar";
 import { runScaffold } from "./scaffold.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,19 +74,65 @@ function runPreCompile(sketchRoot: string, cmd: string | undefined): void {
   }
 }
 
-function runAsc(sketchRoot: string, manifest: SketchJson, extra: string[]): void {
+function compileAssembly(sketchRoot: string, manifest: SketchJson, extra: string[]): boolean {
   let { entry, config, target } = manifest.assembly;
   let args = ["exec", "asc", entry, "--config", config, "--target", target, ...extra];
   let r = spawnSync("pnpm", args, { cwd: sketchRoot, stdio: "inherit" });
-  if (r.status !== 0) {
-    process.exit(r.status ?? 1);
+  return r.status === 0;
+}
+
+function runAsc(sketchRoot: string, manifest: SketchJson, extra: string[]): void {
+  if (!compileAssembly(sketchRoot, manifest, extra)) {
+    process.exit(1);
   }
 }
 
-function spawnAscWatch(sketchRoot: string, manifest: SketchJson): ChildProcess {
-  let { entry, config, target } = manifest.assembly;
-  let args = ["exec", "asc", entry, "--config", config, "--target", target, "--watch"];
-  return spawn("pnpm", args, { cwd: sketchRoot, stdio: "inherit" });
+/**
+ * AssemblyScript 0.28's `asc` does not support `--watch`. Re-run `asc` when sources change.
+ * Wasm output updates are picked up by the Vite dev plugin in `vite.config.mts` (full reload).
+ */
+function startAssemblySourceWatcher(sketchRoot: string, manifest: SketchJson): () => void {
+  let entryAbs = path.resolve(sketchRoot, manifest.assembly.entry);
+  let entryDir = path.dirname(entryAbs);
+  let asconfigAbs = path.resolve(sketchRoot, manifest.assembly.config);
+  let watchPaths = [entryDir, asconfigAbs];
+  let linkedRuntimeAs = path.join(
+    sketchRoot,
+    "node_modules",
+    "@as3-wasm-runtime",
+    "runtime-as",
+    "assembly"
+  );
+  if (existsSync(linkedRuntimeAs)) {
+    watchPaths.push(linkedRuntimeAs);
+  }
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let schedule = (): void => {
+    if (debounceTimer != null) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      console.log("[as3-sketch] Recompiling AssemblyScript…");
+      if (!compileAssembly(sketchRoot, manifest, [])) {
+        console.error("[as3-sketch] asc failed; fix errors to update wasm.");
+      }
+    }, 150);
+  };
+
+  let watcher = chokidar.watch(watchPaths, {
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
+  });
+  watcher.on("all", schedule);
+
+  return () => {
+    if (debounceTimer != null) {
+      clearTimeout(debounceTimer);
+    }
+    void watcher.close();
+  };
 }
 
 /** `pnpm exec as3-sketch -- <args>` and `pnpm run sketch -- <args>` insert a leading `--`. */
@@ -167,10 +214,10 @@ async function main(): Promise<void> {
   buildRuntimeJs(repoRoot);
   runPreCompile(sketchRoot, manifest.hooks?.preCompile);
 
-  let ascWatch: ChildProcess | null = null;
+  let stopAssemblyWatcher: (() => void) | null = null;
   if (cmd === "dev") {
     runAsc(sketchRoot, manifest, []);
-    ascWatch = spawnAscWatch(sketchRoot, manifest);
+    stopAssemblyWatcher = startAssemblySourceWatcher(sketchRoot, manifest);
   } else {
     runAsc(sketchRoot, manifest, []);
   }
@@ -188,8 +235,8 @@ async function main(): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     vite.on("exit", (code, signal) => {
-      if (ascWatch != null) {
-        ascWatch.kill("SIGINT");
+      if (stopAssemblyWatcher != null) {
+        stopAssemblyWatcher();
       }
       if (signal === "SIGINT" || signal === "SIGTERM") {
         resolve();

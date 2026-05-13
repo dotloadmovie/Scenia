@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -39,6 +40,7 @@ export interface ScaffoldOptions {
   width: number;
   height: number;
   description: string;
+  install: boolean;
 }
 
 export function printScaffoldHelp(): void {
@@ -51,8 +53,13 @@ Options:
   -w, --width          Stage / canvas width (default 640)
       --height         Stage / canvas height (default 360)
   -d, --description    package.json "description" field
+      --no-install     Skip the automatic \`pnpm install\` after scaffolding
 
 Slug: lowercase kebab-case (e.g. particle-field).
+
+After writing the sketch files this command runs \`pnpm install\` from the
+repository root so the new workspace package picks up its
+\`workspace:*\` dependencies. Pass \`--no-install\` to skip this step.
 
 Must be run from inside the monorepo (pnpm-workspace.yaml is discovered upward).
 
@@ -66,6 +73,7 @@ export function parseScaffoldArgv(argv: string[]): ScaffoldOptions {
   let width = 640;
   let height = 360;
   let description = "";
+  let install = true;
 
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i];
@@ -79,6 +87,10 @@ export function parseScaffoldArgv(argv: string[]): ScaffoldOptions {
     }
     if (a === "--description" || a === "-d") {
       description = argv[++i] ?? "";
+      continue;
+    }
+    if (a === "--no-install") {
+      install = false;
       continue;
     }
     if (a.startsWith("-")) {
@@ -96,7 +108,7 @@ export function parseScaffoldArgv(argv: string[]): ScaffoldOptions {
   }
 
   validateSlug(slug);
-  return { slug, width, height, description };
+  return { slug, width, height, description, install };
 }
 
 function assemblySource(width: number, height: number): string {
@@ -211,6 +223,23 @@ See the repository root README for \`sketch.json\`, optional \`host/main.ts\`, a
 `;
 }
 
+function runPnpmInstall(repoRoot: string): void {
+  console.log("Running pnpm install in " + repoRoot);
+  let r = spawnSync("pnpm", ["install"], { cwd: repoRoot, stdio: "inherit" });
+  if (r.error != null) {
+    let code = (r.error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      throw new Error(
+        "Could not run pnpm: command not found on PATH. Re-run with --no-install or install pnpm and run `pnpm install` manually."
+      );
+    }
+    throw r.error;
+  }
+  if (r.status !== 0) {
+    throw new Error("pnpm install failed (exit " + String(r.status ?? r.signal ?? "?") + ")");
+  }
+}
+
 export function runScaffold(cwd: string, argv: string[]): void {
   if (argv[0] === "--help" || argv[0] === "-h") {
     printScaffoldHelp();
@@ -237,5 +266,12 @@ export function runScaffold(cwd: string, argv: string[]): void {
   writeFileSync(path.join(sketchDir, "README.md"), readme(opts.slug), "utf8");
 
   console.log("Created sketch at " + sketchDir);
-  console.log("Next: pnpm install && pnpm run sketch dev examples/" + opts.slug);
+
+  if (opts.install) {
+    runPnpmInstall(repoRoot);
+    console.log("Next: pnpm run sketch dev examples/" + opts.slug);
+  } else {
+    console.log("Skipped pnpm install (--no-install).");
+    console.log("Next: pnpm install && pnpm run sketch dev examples/" + opts.slug);
+  }
 }

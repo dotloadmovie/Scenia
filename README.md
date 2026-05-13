@@ -72,6 +72,10 @@ pnpm run sketch -- scaffold my-sketch
 pnpm exec as3-sketch scaffold my-sketch --width 1280 --height 720
 ```
 
+After writing the files the scaffolder runs `pnpm install` from the repo root
+so the new workspace package picks up its `workspace:*` dependencies. Pass
+`--no-install` to skip that step (e.g. for offline or CI use).
+
 `pnpm run sketch scaffold …` and `pnpm run sketch -- scaffold …` behave the same
 (the CLI ignores a leading `--` inserted by `pnpm exec`). See
 `pnpm exec as3-sketch scaffold --help`.
