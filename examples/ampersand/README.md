@@ -1,0 +1,21 @@
+# ampersand
+
+Empty sketch created with `as3-sketch scaffold`. AssemblyScript entry:
+`assembly/index.ts` (bound `Stage` with no display objects yet).
+
+## Run
+
+```sh
+pnpm install   # from repository root, once
+pnpm run sketch dev examples/ampersand
+```
+
+Or from this directory: `pnpm dev`.
+
+## Build
+
+```sh
+pnpm run sketch build examples/ampersand
+```
+
+See the repository root README for `sketch.json`, optional `host/main.ts`, and the default canvas shell.
