@@ -18,6 +18,22 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  examples/ampersand:
+    dependencies:
+      '@as3-wasm-runtime/runtime-js':
+        specifier: workspace:*
+        version: link:../../packages/runtime-js
+      '@as3-wasm-runtime/sketch-host':
+        specifier: workspace:*
+        version: link:../../packages/sketch-host
+    devDependencies:
+      '@as3-wasm-runtime/runtime-as':
+        specifier: workspace:*
+        version: link:../../packages/runtime-as
+      assemblyscript:
+        specifier: ^0.28.9
+        version: 0.28.17
+
   examples/bouncing-ball:
     dependencies:
       '@as3-wasm-runtime/runtime-js':
@@ -36,6 +52,22 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  examples/my-sketch:
+    dependencies:
+      '@as3-wasm-runtime/runtime-js':
+        specifier: workspace:*
+        version: link:../../packages/runtime-js
+      '@as3-wasm-runtime/sketch-host':
+        specifier: workspace:*
+        version: link:../../packages/sketch-host
+    devDependencies:
+      '@as3-wasm-runtime/runtime-as':
+        specifier: workspace:*
+        version: link:../../packages/runtime-as
+      assemblyscript:
+        specifier: ^0.28.9
+        version: 0.28.17
 
   packages/compiler: {}
 

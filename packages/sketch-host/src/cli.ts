@@ -88,6 +88,14 @@ function spawnAscWatch(sketchRoot: string, manifest: SketchJson): ChildProcess {
   return spawn("pnpm", args, { cwd: sketchRoot, stdio: "inherit" });
 }
 
+/** `pnpm exec as3-sketch -- <args>` and `pnpm run sketch -- <args>` insert a leading `--`. */
+function stripLeadingPassthroughDash(argv: string[]): string[] {
+  if (argv[0] === "--") {
+    return argv.slice(1);
+  }
+  return argv;
+}
+
 function printHelp(): void {
   console.log(`as3-sketch — shared Vite shell for AssemblyScript sketches
 
@@ -125,7 +133,11 @@ function parseArgs(argv: string[]): { cmd: "dev" | "build"; sketchPath: string; 
 }
 
 async function main(): Promise<void> {
-  let argv = process.argv.slice(2);
+  let argv = stripLeadingPassthroughDash(process.argv.slice(2));
+  if (argv[0] === "--help" || argv[0] === "-h") {
+    printHelp();
+    process.exit(0);
+  }
   let head = argv[0];
   if (head === "scaffold") {
     try {

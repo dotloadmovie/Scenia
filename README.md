@@ -72,8 +72,9 @@ pnpm run sketch -- scaffold my-sketch
 pnpm exec as3-sketch scaffold my-sketch --width 1280 --height 720
 ```
 
-Use `pnpm run sketch -- scaffold …` so `--width` / `--height` are not parsed by
-pnpm. See `pnpm exec as3-sketch scaffold --help`.
+`pnpm run sketch scaffold …` and `pnpm run sketch -- scaffold …` behave the same
+(the CLI ignores a leading `--` inserted by `pnpm exec`). See
+`pnpm exec as3-sketch scaffold --help`.
 
 Extra Vite flags go after `--`:
 
