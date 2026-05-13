@@ -1,6 +1,7 @@
 import { cpSync, existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import chokidar from "chokidar";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 
@@ -46,6 +47,80 @@ function sketchVirtualPlugin(sketchRoot: string): Plugin {
         let href = pathToFileURL(target).href;
         return `import ${JSON.stringify(href)};\n`;
       }
+    }
+  };
+}
+
+/**
+ * `as3-sketch dev` re-runs `asc` and rewrites `public/*.wasm`, but the sketch directory lies
+ * outside Vite's `root`, so Vite's built-in watcher filters those paths and the dev client
+ * never gets a reload signal. We run a dedicated chokidar watcher and call `server.hot.send`
+ * ourselves so the browser fetches the new wasm.
+ */
+function sketchWasmDevReloadPlugin(sketchRoot: string): Plugin {
+  let manifestPath = path.join(sketchRoot, "sketch.json");
+  let pubDir = path.join(sketchRoot, "public");
+
+  return {
+    name: "as3-sketch-wasm-dev-reload",
+    apply: "serve",
+    configureServer(server) {
+      let manifestAbs = path.resolve(manifestPath);
+      let pubAbs = path.resolve(pubDir);
+
+      let watchTargets: string[] = [];
+      if (existsSync(manifestAbs)) {
+        watchTargets.push(manifestAbs);
+      }
+      if (existsSync(pubAbs)) {
+        watchTargets.push(pubAbs);
+      }
+      if (watchTargets.length === 0) {
+        return;
+      }
+
+      let debounce: ReturnType<typeof setTimeout> | null = null;
+      let scheduleReload = (reason: string): void => {
+        if (debounce != null) {
+          clearTimeout(debounce);
+        }
+        debounce = setTimeout(() => {
+          debounce = null;
+          server.hot.send({ type: "full-reload" });
+          server.config.logger.info(`[as3-sketch] full reload (${reason})`);
+        }, 100);
+      };
+
+      let watcher = chokidar.watch(watchTargets, {
+        ignoreInitial: true,
+        awaitWriteFinish: { stabilityThreshold: 80, pollInterval: 40 }
+      });
+
+      let onFsEvent = (_event: string, file: string): void => {
+        let abs = path.resolve(file);
+        if (abs === manifestAbs) {
+          scheduleReload("sketch.json");
+          return;
+        }
+        if (
+          (abs.startsWith(pubAbs + path.sep) || abs === pubAbs) &&
+          abs.endsWith(".wasm")
+        ) {
+          scheduleReload(path.relative(sketchRoot, abs) || "wasm");
+        }
+      };
+      watcher.on("all", onFsEvent);
+
+      let shutdown = (): void => {
+        if (debounce != null) {
+          clearTimeout(debounce);
+          debounce = null;
+        }
+        void watcher.close();
+      };
+      server.httpServer?.once("close", shutdown);
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
     }
   };
 }
@@ -120,7 +195,11 @@ export default defineConfig(() => {
   return {
     root: __dirname,
     publicDir: false,
-    plugins: [sketchVirtualPlugin(sketchRoot), sketchPublicPlugin(sketchRoot)],
+    plugins: [
+      sketchVirtualPlugin(sketchRoot),
+      sketchWasmDevReloadPlugin(sketchRoot),
+      sketchPublicPlugin(sketchRoot)
+    ],
     server: {
       host: "0.0.0.0",
       fs: {
