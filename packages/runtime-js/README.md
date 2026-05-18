@@ -56,6 +56,22 @@ Asset ids are computed from bitmap paths with `assetIdForPath(path)`. The same
 hash exists in AssemblyScript, so `new Bitmap("ball.png")` can be matched to the
 image loaded by JavaScript without string marshaling.
 
+## Portable sketch bundles
+
+`loadSketchBundle` loads a JSON bundle (base64 wasm + assets) produced by
+`as3-sketch bundle`. Use this for standalone HTML pages without Vite:
+
+```ts
+import { loadSketchBundle } from "@as3-wasm-runtime/runtime-js";
+
+await loadSketchBundle("./sketch.bundle.json", {
+  mount: document.getElementById("app")!
+});
+```
+
+See the repository root README for `pnpm run build:bundle` and
+`examples/player/`.
+
 ## Build
 
 ```sh

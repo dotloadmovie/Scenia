@@ -28,11 +28,13 @@ and a full compiler are explicitly out of scope for this MVP.
 packages/
   runtime-as/      AssemblyScript display-list primitives compiled into Wasm
   runtime-js/      TypeScript browser host that owns canvas, assets, and drawing
+  runtime-player/  Re-export of bundle loader for standalone HTML pages
   sketch-host/     Shared Vite shell + `as3-sketch` CLI for browser sketches
   compiler/        Placeholder for a later AS3-like-to-AssemblyScript transform
 examples/
   <name>/          Sketches (pnpm exec as3-sketch scaffold --help)
   bouncing-ball/   Reference sketch using sketch-host
+  player/          Standalone page that loads sketch.bundle.json (no Vite app)
 ```
 
 ## Getting started
@@ -50,12 +52,40 @@ as:
 pnpm example:bouncing-ball
 ```
 
+### Portable bundle + standalone player (MVP)
+
+Sketches still use **Vite for day-to-day dev** (`pnpm run sketch dev …`). For a
+single-file export that any static HTML page can load:
+
+```sh
+pnpm run build:bundle
+pnpm run preview:bundle
+```
+
+`build:bundle` compiles `examples/bouncing-ball`, writes
+`dist/sketch.bundle.json` (JSON with base64 wasm and assets), copies the bundle
+and `runtime-player.js` into `examples/player/`, and runs a small smoke check.
+
+`preview:bundle` serves `examples/player/index.html`, which loads the bundle via
+`loadSketchBundle("./sketch.bundle.json", { mount })`.
+
+Build a bundle for another sketch:
+
+```sh
+pnpm run sketch -- bundle examples/ampersand
+```
+
+**MVP limitations:** JSON + base64 only (large files inflate size); no
+compression or binary container; assets must be listed in `sketch.json`
+`runtime.assets`; host extensions (`host/main.ts`) are not included in the
+bundle (canvas-only bootstrap).
+
 ### Sketches (`sketch-host` + `as3-sketch`)
 
 Sketches avoid duplicating Vite boilerplate: one shared package
 (`@as3-wasm-runtime/sketch-host`) owns the dev server, HTML shell, Wasm output
 location (`public/` under the sketch), and `vite build`. Each sketch directory
-carries `sketch.json` (manifest), AssemblyScript sources + `asconfig.json`,
+carries `sketch.json` (the sketch manifest), AssemblyScript sources + `asconfig.json`,
 `public/` assets, and optionally a **host extension** (see below).
 
 From the repository root (after `pnpm install`):
@@ -63,6 +93,7 @@ From the repository root (after `pnpm install`):
 ```sh
 pnpm run sketch dev examples/bouncing-ball
 pnpm run sketch build examples/bouncing-ball
+pnpm run sketch -- bundle examples/bouncing-ball
 ```
 
 Scaffold a new empty sketch (creates `examples/<slug>/` with `sketch.json`,

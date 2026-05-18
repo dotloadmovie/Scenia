@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chokidar from "chokidar";
+import { buildSketchBundle } from "./bundle.js";
 import { runScaffold } from "./scaffold.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -149,10 +150,12 @@ function printHelp(): void {
 Usage:
   as3-sketch dev [sketch-directory] [-- ...vite-args]
   as3-sketch build [sketch-directory] [-- ...vite-args]
+  as3-sketch bundle [sketch-directory]
   as3-sketch scaffold <slug> [--width <n>] [--height <n>] [--description <text>]
 
 Examples:
   as3-sketch dev examples/bouncing-ball
+  as3-sketch bundle examples/bouncing-ball
   as3-sketch scaffold particle-field --width 1280 --height 720
   pnpm --filter @as3-wasm-runtime/sketch-host exec -- as3-sketch dev .
 
@@ -160,8 +163,9 @@ Environment:
   SKETCH_ROOT   If set, absolute path to the sketch root (CLI sketch-directory is ignored).
 
 Notes:
-  sketch.json must declare assembly entry/config/target and optional hooks.preCompile.
+  sketch.json is the sketch manifest (wasm URL, canvas, assets, assembly paths).
   Optional host extension: sketch-directory/host/main.ts (see repository README).
+  \`bundle\` compiles wasm and writes dist/sketch.bundle.json (portable JSON + base64).
   Run \`as3-sketch scaffold --help\` for scaffold details.
 `);
 }
@@ -179,6 +183,19 @@ function parseArgs(argv: string[]): { cmd: "dev" | "build"; sketchPath: string; 
   return { cmd: cmd as "dev" | "build", sketchPath, viteArgs };
 }
 
+async function runBundle(sketchRoot: string): Promise<void> {
+  ensureSketchHostBuilt();
+  let manifest = readSketchManifest(sketchRoot);
+  let repoRoot = findRepoRoot(sketchRoot);
+
+  buildRuntimeJs(repoRoot);
+  runPreCompile(sketchRoot, manifest.hooks?.preCompile);
+  runAsc(sketchRoot, manifest, []);
+
+  let outFile = buildSketchBundle(sketchRoot);
+  console.log("[as3-sketch] Wrote " + outFile);
+}
+
 async function main(): Promise<void> {
   let argv = stripLeadingPassthroughDash(process.argv.slice(2));
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -186,6 +203,24 @@ async function main(): Promise<void> {
     process.exit(0);
   }
   let head = argv[0];
+  if (head === "bundle") {
+    let sketchPath = argv.length >= 2 ? argv[1] : ".";
+    let sketchRoot =
+      process.env.SKETCH_ROOT != null && process.env.SKETCH_ROOT.length > 0
+        ? path.resolve(process.env.SKETCH_ROOT)
+        : path.resolve(process.cwd(), sketchPath);
+    if (!existsSync(path.join(sketchRoot, "sketch.json"))) {
+      console.error("No sketch.json in " + sketchRoot);
+      process.exit(1);
+    }
+    try {
+      await runBundle(sketchRoot);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+    return;
+  }
   if (head === "scaffold") {
     try {
       runScaffold(process.cwd(), argv.slice(1));
