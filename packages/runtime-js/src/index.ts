@@ -1,3 +1,11 @@
+import {
+  assertSketchBundle,
+  decodeBase64ToUint8Array,
+  fetchSketchBundle,
+  type LoadSketchBundleOptions,
+  type SketchBundle
+} from "./bundle.js";
+
 export const RENDER_KIND_BITMAP = 1;
 export const RENDER_KIND_TEXT = 2;
 export const RENDER_BITMAP_STRIDE = 9;
@@ -31,9 +39,14 @@ export interface RuntimeAsset {
   url?: string;
 }
 
+export type WasmSource = string | URL | ArrayBuffer | Uint8Array;
+
 export interface RuntimeHostOptions {
   canvas: HTMLCanvasElement;
-  wasmUrl: string | URL;
+  /** Fetch and instantiate wasm from a URL (Vite dev / static hosting). */
+  wasmUrl?: string | URL;
+  /** Instantiate wasm from in-memory bytes (portable bundle player). */
+  wasmBytes?: ArrayBuffer | Uint8Array;
   assets?: Array<string | RuntimeAsset>;
   background?: string;
   imports?: WebAssembly.Imports;
@@ -121,7 +134,8 @@ export class WasmCanvasRuntime {
   }
 
   static async load(options: RuntimeHostOptions): Promise<WasmCanvasRuntime> {
-    let wasmModule = await instantiateWasm(options.wasmUrl, options.imports);
+    let wasmSource = resolveWasmSource(options);
+    let wasmModule = await instantiateWasm(wasmSource, options.imports);
     let runtimeExports = assertRuntimeExports(wasmModule.instance.exports);
     let runtime = new WasmCanvasRuntime(
       options.canvas,
@@ -485,11 +499,17 @@ export function readAssemblyScriptString(memory: WebAssembly.Memory, ptr: number
   return result;
 }
 
-async function instantiateWasm(
-  wasmUrl: string | URL,
-  imports: WebAssembly.Imports = {}
-): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
-  let mergedImports: WebAssembly.Imports = {
+function resolveWasmSource(options: RuntimeHostOptions): WasmSource {
+  let hasUrl = options.wasmUrl != null;
+  let hasBytes = options.wasmBytes != null;
+  if (hasUrl === hasBytes) {
+    throw new Error("RuntimeHostOptions requires exactly one of wasmUrl or wasmBytes.");
+  }
+  return hasBytes ? options.wasmBytes! : options.wasmUrl!;
+}
+
+function buildWasmImports(imports: WebAssembly.Imports = {}): WebAssembly.Imports {
+  return {
     ...imports,
     env: {
       abort(message: number, fileName: number, line: number, column: number): never {
@@ -498,17 +518,35 @@ async function instantiateWasm(
       ...(imports.env ?? {})
     }
   };
+}
+
+function wasmBytesToArrayBuffer(source: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (source instanceof ArrayBuffer) {
+    return source;
+  }
+  return source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength) as ArrayBuffer;
+}
+
+async function instantiateWasm(
+  source: WasmSource,
+  imports: WebAssembly.Imports = {}
+): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
+  let mergedImports = buildWasmImports(imports);
+
+  if (source instanceof ArrayBuffer || source instanceof Uint8Array) {
+    return WebAssembly.instantiate(wasmBytesToArrayBuffer(source), mergedImports);
+  }
 
   if ("instantiateStreaming" in WebAssembly) {
     try {
-      let response = await fetch(wasmUrl);
+      let response = await fetch(source);
       return await WebAssembly.instantiateStreaming(response, mergedImports);
     } catch {
       // Some static servers do not serve .wasm with application/wasm yet.
     }
   }
 
-  let response = await fetch(wasmUrl);
+  let response = await fetch(source);
   let bytes = await response.arrayBuffer();
   return WebAssembly.instantiate(bytes, mergedImports);
 }
@@ -533,3 +571,67 @@ function assertRuntimeExports(exports: WebAssembly.Exports): WasmRuntimeExports 
 }
 
 const REQUIRED_FUNCTION_EXPORTS = ["update", "getRenderListPtr", "getRenderListLength"] as const;
+
+export type {
+  SketchBundle,
+  SketchBundleManifest,
+  SketchBundlePayload,
+  LoadSketchBundleOptions
+} from "./bundle.js";
+export {
+  assertSketchBundle,
+  decodeBase64ToUint8Array,
+  fetchSketchBundle
+} from "./bundle.js";
+
+function createBundleCanvas(bundle: SketchBundle, mount: HTMLElement): HTMLCanvasElement {
+  let canvas = document.createElement("canvas");
+  if (bundle.manifest.width != null) {
+    canvas.width = bundle.manifest.width;
+  }
+  if (bundle.manifest.height != null) {
+    canvas.height = bundle.manifest.height;
+  }
+  canvas.id = "stage";
+  mount.replaceChildren(canvas);
+  return canvas;
+}
+
+function bundleAssetsToRuntimeAssets(bundle: SketchBundle): RuntimeAsset[] {
+  let assets: RuntimeAsset[] = [];
+  for (let path of Object.keys(bundle.assets)) {
+    let payload = bundle.assets[path];
+    let bytes = decodeBase64ToUint8Array(payload.data);
+    let blob = new Blob([wasmBytesToArrayBuffer(bytes)], { type: payload.mime });
+    assets.push({ path, url: URL.createObjectURL(blob) });
+  }
+  return assets;
+}
+
+/** Load a portable sketch bundle (JSON with base64 wasm/assets) and start the frame loop. */
+export async function loadSketchBundle(
+  source: string | URL | SketchBundle,
+  options: LoadSketchBundleOptions
+): Promise<WasmCanvasRuntime> {
+  let bundle =
+    typeof source === "string" || source instanceof URL
+      ? await fetchSketchBundle(source)
+      : assertSketchBundle(source);
+
+  let canvas = options.canvas ?? createBundleCanvas(bundle, options.mount);
+  if (options.canvas != null && options.canvas.parentElement !== options.mount) {
+    options.mount.replaceChildren(options.canvas);
+  }
+
+  let wasmBytes = decodeBase64ToUint8Array(bundle.wasm.data);
+  let runtime = await WasmCanvasRuntime.load({
+    canvas,
+    wasmBytes,
+    background: bundle.manifest.backgroundColor ?? "#ffffff",
+    assets: bundleAssetsToRuntimeAssets(bundle),
+    debugPointer: options.debugPointer ?? false
+  });
+
+  runtime.start();
+  return runtime;
+}

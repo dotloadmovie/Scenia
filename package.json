@@ -6,9 +6,13 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "build:bundle": "pnpm run sketch -- bundle examples/bouncing-ball && pnpm --filter @as3-wasm-runtime/runtime-player build && node scripts/stage-player-example.mjs && node scripts/smoke-bundle.mjs",
+    "build:player": "pnpm --filter @as3-wasm-runtime/runtime-player build",
     "dev": "pnpm --filter @as3-wasm-runtime/bouncing-ball dev",
     "example:bouncing-ball": "pnpm --filter @as3-wasm-runtime/bouncing-ball dev",
-    "sketch": "pnpm exec as3-sketch"
+    "preview:bundle": "pnpm --filter @as3-wasm-runtime/player-example preview",
+    "sketch": "pnpm exec as3-sketch",
+    "smoke:bundle": "node scripts/smoke-bundle.mjs"
   },
   "devDependencies": {
     "@as3-wasm-runtime/sketch-host": "workspace:*",

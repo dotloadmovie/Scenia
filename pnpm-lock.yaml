@@ -53,6 +53,12 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  examples/player:
+    devDependencies:
+      vite:
+        specifier: ^7.1.12
+        version: 7.3.3(@types/node@22.19.18)
+
   packages/compiler: {}
 
   packages/runtime-as:
@@ -62,6 +68,19 @@ importers:
         version: 0.28.17
 
   packages/runtime-js: {}
+
+  packages/runtime-player:
+    dependencies:
+      '@as3-wasm-runtime/runtime-js':
+        specifier: workspace:*
+        version: link:../runtime-js
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.12
+        version: 7.3.3(@types/node@22.19.18)
 
   packages/sketch-host:
     dependencies:
