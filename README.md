@@ -145,7 +145,7 @@ pnpm run preview:bundle builds/bouncing-ball
 
 ### Demo gallery (GitHub Pages)
 
-A static gallery at [https://dotloadmovie.github.io/scenia/](https://dotloadmovie.github.io/scenia/)
+A static gallery at [https://dotloadmovie.github.io/Scenia/](https://dotloadmovie.github.io/Scenia/)
 wraps bundled sketches with a persistent header (Scenia title, GitHub link, demo
 dropdown). Sketches load in an iframe so bundle paths stay relative and unchanged.
 
@@ -162,7 +162,7 @@ pnpm run preview:pages
 ```
 
 Open `http://localhost:5176/` (or `?demo=bouncing-ball` to deep-link). Local
-preview uses base `/`; production uses `/scenia/` (set via `PAGES_BASE` in CI).
+preview uses base `/`; production uses `/Scenia/` (set via `PAGES_BASE` in CI).
 
 **Add a demo to the gallery:**
 
