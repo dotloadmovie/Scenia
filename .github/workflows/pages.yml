@@ -27,7 +27,7 @@ jobs:
       - run: pnpm build
       - run: pnpm run build:pages
         env:
-          PAGES_BASE: /scenia/
+          PAGES_BASE: /Scenia/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

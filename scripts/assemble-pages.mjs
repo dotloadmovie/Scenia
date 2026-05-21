@@ -67,7 +67,7 @@ function writeRedirectIndex(buildOutDir, slug) {
   writeFileSync(path.join(buildOutDir, "index.html"), html, "utf8");
 }
 
-const pagesBase = normalizeBase(process.env.PAGES_BASE ?? "/scenia/");
+const pagesBase = normalizeBase(process.env.PAGES_BASE ?? "/Scenia/");
 const demos = loadDemos();
 
 if (existsSync(outDir)) {
