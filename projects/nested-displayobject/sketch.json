@@ -7,7 +7,7 @@
   },
   "runtime": {
     "background": "#1a1a1a",
-    "assets": []
+    "assets": ["ampersand.png"]
   },
   "assembly": {
     "entry": "assembly/index.ts",
